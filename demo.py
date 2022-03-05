@@ -13,6 +13,7 @@ from raft import RAFT
 from utils import flow_viz
 from utils.utils import InputPadder
 
+from torchvision.io import read_video
 
 
 DEVICE = 'cuda'
@@ -68,6 +69,39 @@ def demo(args):
             idx += 1
 
 
+def demo_video(args):
+    model = torch.nn.DataParallel(RAFT(args))
+    model.load_state_dict(torch.load(args.model))
+
+    model = model.module
+    model.to(DEVICE)
+    model.eval()
+
+    with torch.no_grad():
+        
+        videos_to_predict = os.listdir("data")
+        for vid in videos_to_predict:
+            # T H W C
+            video_tensor = read_video(os.path.join("data", vid))[0]
+            video_tensor = video_tensor.permute(0, 3, 1, 2).float().to(DEVICE)
+            print(video_tensor.dtype)
+            os.makedirs(f"data/flow/{vid.split('.')[0]}")
+
+            idx = 0
+            T = video_tensor.shape[0]
+            for i in range(T - 1):
+                image1 = video_tensor[i][None]
+                image2 = video_tensor[i + 1][None]
+
+                padder = InputPadder(image1.shape)
+                image1, image2 = padder.pad(image1, image2)
+
+                flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
+                viz(image1, flow_up, fn=f"data/flow/{vid.split('.')[0]}/{idx}.png")
+                idx += 1
+        
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint")
@@ -77,4 +111,5 @@ if __name__ == '__main__':
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
     args = parser.parse_args()
 
-    demo(args)
+    # demo(args)
+    demo_video(args)
