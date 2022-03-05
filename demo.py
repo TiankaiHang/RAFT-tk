@@ -7,6 +7,7 @@ import cv2
 import glob
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 from raft import RAFT
@@ -80,12 +81,15 @@ def demo_video(args):
     with torch.no_grad():
         
         videos_to_predict = os.listdir("data")
+        videos_to_predict = [_v for _v in videos_to_predict if _v.endswith(".mp4")]
+
         for vid in videos_to_predict:
             # T H W C
-            video_tensor = read_video(os.path.join("data", vid))[0]
+            video_tensor = read_video(os.path.join("data", vid), pts_unit='sec')[0]
             video_tensor = video_tensor.permute(0, 3, 1, 2).float().to(DEVICE)
+            # video_tensor = F.interpolate(video_tensor, size=(512, 512), mode="bicubic")
             print(video_tensor.dtype)
-            os.makedirs(f"data/flow/{vid.split('.')[0]}")
+            os.makedirs(f"data/flow/{vid.split('.')[0]}", exist_ok=True)
 
             idx = 0
             T = video_tensor.shape[0]
@@ -97,8 +101,32 @@ def demo_video(args):
                 image1, image2 = padder.pad(image1, image2)
 
                 flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
-                viz(image1, flow_up, fn=f"data/flow/{vid.split('.')[0]}/{idx}.png")
+                viz(image2, flow_up, fn=f"data/flow/{vid.split('.')[0]}/{idx}.png")
                 idx += 1
+        
+
+def concat_frames():
+    videos_to_predict = os.listdir("data")
+    videos_to_predict = [_v for _v in videos_to_predict if _v.endswith(".mp4")]
+
+    overall = []
+
+    for vid in videos_to_predict:
+        print(vid)
+        current_video_flow = []
+        flow_dir = f"data/flow/{vid.split('.')[0]}"
+        flows = os.listdir(flow_dir)
+        for i in range(len(flows)):
+            current_video_flow.append(
+                cv2.imread(os.path.join(flow_dir, f"{i}.png"))
+            )
+
+        overall.append(
+            np.concatenate(current_video_flow, axis=1)
+        )
+
+    overall = np.concatenate(overall, axis=0)
+    cv2.imwrite("data/flow-compare.png", overall)
         
 
 
@@ -113,3 +141,4 @@ if __name__ == '__main__':
 
     # demo(args)
     demo_video(args)
+    concat_frames()
