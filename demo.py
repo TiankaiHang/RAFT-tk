@@ -23,7 +23,7 @@ def load_image(imfile):
     return img[None].to(DEVICE)
 
 
-def viz(img, flo):
+def viz(img, flo, fn):
     img = img[0].permute(1,2,0).cpu().numpy()
     flo = flo[0].permute(1,2,0).cpu().numpy()
     
@@ -35,8 +35,9 @@ def viz(img, flo):
     # plt.imshow(img_flo / 255.0)
     # plt.show()
 
-    cv2.imshow('image', img_flo[:, :, [2,1,0]]/255.0)
-    cv2.waitKey()
+    # cv2.imshow('image', img_flo[:, :, [2,1,0]]/255.0)
+    # cv2.waitKey()
+    cv2.imwrite(fn, img_flo[:, :, [2,1,0]])
 
 
 def demo(args):
@@ -50,8 +51,11 @@ def demo(args):
     with torch.no_grad():
         images = glob.glob(os.path.join(args.path, '*.png')) + \
                  glob.glob(os.path.join(args.path, '*.jpg'))
+
+        os.makedirs(f"{args.path}/flow", exist_ok=True)
         
         images = sorted(images)
+        idx = 0
         for imfile1, imfile2 in zip(images[:-1], images[1:]):
             image1 = load_image(imfile1)
             image2 = load_image(imfile2)
@@ -60,7 +64,8 @@ def demo(args):
             image1, image2 = padder.pad(image1, image2)
 
             flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
-            viz(image1, flow_up)
+            viz(image1, flow_up, fn=f"{args.path}/flow/{idx}.png")
+            idx += 1
 
 
 if __name__ == '__main__':
